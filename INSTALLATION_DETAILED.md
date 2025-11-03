@@ -383,6 +383,174 @@ Beschriftung: "5V - Display Node"
 
 ---
 
+
+### 6.5 RTC DS3231 Setup ⏰
+
+**Bibliothek installieren:**
+
+```
+1. Arduino IDE → Tools → Manage Libraries
+2. Suche nach "RTClib"
+3. Install "RTClib by Adafruit" (Version 2.x oder höher)
+```
+
+**Initiale Zeit setzen:**
+
+```cpp
+// Code-Beispiel zum Setzen der RTC-Zeit (einmalig ausführen)
+#include <RTClib.h>
+
+RTC_DS3231 rtc;
+
+void setup() {
+  Serial.begin(115200);
+  
+  if (!rtc.begin()) {
+    Serial.println("ERROR: RTC not found!");
+    while (1) delay(10);
+  }
+  
+  // Setze Zeit auf Compile-Zeit (einmalig beim Upload)
+  rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  
+  // ODER: Manuelle Zeit setzen
+  // rtc.adjust(DateTime(2025, 11, 3, 9, 0, 0)); // Jahr, Monat, Tag, Stunde, Minute, Sekunde
+  
+  Serial.println("RTC time set successfully!");
+}
+
+void loop() {
+  DateTime now = rtc.now();
+  Serial.print(now.year());
+  Serial.print('-');
+  Serial.print(now.month());
+  Serial.print('-');
+  Serial.print(now.day());
+  Serial.print(' ');
+  Serial.print(now.hour());
+  Serial.print(':');
+  Serial.print(now.minute());
+  Serial.print(':');
+  Serial.println(now.second());
+  
+  delay(1000);
+}
+```
+
+**Zeitzone anpassen:**
+
+```
+Für Mitteleuropäische Zeit (MEZ/CET):
+- Winterzeit: UTC +1 Stunde
+- Sommerzeit: UTC +2 Stunden
+
+Im Code nach Bedarf anpassen:
+  DateTime adjusted = now + TimeSpan(0, 1, 0, 0); // +1 Stunde
+```
+
+**CR2032 Batterie:**
+
+```
+□ CR2032 Knopfzelle im RTC-Modul einlegen
+□ Batterie hält ca. 5-10 Jahre
+□ Bei Stromausfall: Zeit bleibt erhalten
+□ Warnung im Serial Monitor wenn Batterie leer
+```
+
+### 6.6 SD-Karte Vorbereitung 💾
+
+**SD-Karte formatieren:**
+
+```
+1. SD-Karte (empfohlen: 4-32 GB, Class 10)
+2. Am PC anschließen
+3. Formatieren als FAT32:
+   - Windows: Rechtsklick → Formatieren → FAT32
+   - Linux: sudo mkfs.vfat -F 32 /dev/sdX
+   - Mac: Disk Utility → Erase → MS-DOS (FAT)
+4. Label (optional): "BIOSYNC"
+```
+
+**Automatische Dateierstellung:**
+
+```
+Die DisplayNode-Firmware erstellt automatisch beim ersten Start:
+
+sensor.csv:
+  Timestamp,Distance_cm,Temperature_C,Turbidity,TDS_ppm
+  (Header wird automatisch geschrieben)
+
+relay.csv:
+  Timestamp,Event,Pump_State,Vent_State
+  (Header wird automatisch geschrieben)
+
+Status-LED (D53):
+  - Blinkt beim Schreibvorgang
+  - Leuchtet dauerhaft bei erfolgreicher Initialisierung
+  - Aus bei SD-Karten-Fehler
+```
+
+**Freien Speicher überwachen:**
+
+```cpp
+// Im Serial Monitor wird angezeigt:
+SD Card initialized
+  Card Type: SDHC
+  Volume: FAT32
+  Size: 7.40 GB
+  Free: 7.38 GB
+
+Bei <100 MB frei: Warnung im Serial Monitor
+```
+
+**Troubleshooting SD-Karte:**
+
+```
+Problem: "SD Card initialization failed"
+Lösung:
+  □ SD-Karte als FAT32 formatiert?
+  □ CS-Pin korrekt (D53)?
+  □ Verkabelung SPI-Bus prüfen
+  □ Andere SD-Karte testen
+  □ SD-Karte vollständig eingesteckt?
+
+Problem: "File write error"
+Lösung:
+  □ SD-Karte voll?
+  □ Schreibschutz-Schalter an Karte?
+  □ SD-Karte defekt?
+```
+
+### 6.7 RelayNode Kalibrierung (falls installiert) ⚡
+
+**Wenn RelayNode installiert ist:**
+
+Siehe [RELAY_NODE_GUIDE.md](../RELAY_NODE_GUIDE.md) für detaillierte Kalibrierung.
+
+**Kurzübersicht:**
+
+```
+1. RelayNode-Firmware hochladen (RelayNode/RelayNode.ino)
+
+2. Serial Monitor öffnen (115200 baud)
+
+3. Schwellwerte kalibrieren:
+   - LED AUS: Analogwert ablesen (z.B. 50)
+   - LED AN: Analogwert ablesen (z.B. 800)
+   - Schwellwert = Mittelwert (z.B. 425)
+
+4. In config.h anpassen:
+   #define PUMP_THRESHOLD 425
+   #define VENT_THRESHOLD 425
+   // usw.
+
+5. Firmware erneut hochladen
+
+6. Test: LEDs ein-/ausschalten und Status im Serial Monitor prüfen
+```
+
+---
+
 ## 7. Inbetriebnahme und Test
 
 ### 7.1 Systemstart

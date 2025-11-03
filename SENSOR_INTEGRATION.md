@@ -458,3 +458,326 @@ DS18B20 ist werkseitig kalibriert:
 - Genauigkeit: ±0.5°C (-10°C bis +85°C)
 - Zusätzliche Kalibrierung verbessert auf ±0.2°C
 
+---
+
+## 6. ALS-PT19 Lichtsensor (RelayNode)
+
+### 6.1 Funktionsprinzip
+
+Der ALS-PT19 ist ein analoger Ambient Light Sensor (Umgebungslichtsensor), der Lichtintensität in eine proportionale Spannung (0-VCC) umwandelt.
+
+**Technologie:** Photodiode mit integriertem Verstärker
+
+**Anwendung im BioSync System:** 
+- Erkennung von LED-Zuständen an Schrack-Relays
+- Unterscheidung zwischen LED AUS, LED AN, LED BLINKEND
+- Event-basierte Statusmeldungen
+
+### 6.2 Technische Spezifikationen
+
+| Parameter | Wert | Einheit | Bemerkung |
+|-----------|------|---------|-----------|
+| **Versorgungsspannung** | 3.3 - 5.0 | V | Typ. 5V für Arduino |
+| **Stromaufnahme** | 0.5 | mA | Sehr niedrig |
+| **Ausgangssignal** | 0 - VCC | V | Analog, proportional zur Lichtintensität |
+| **Spektralbereich** | 350 - 750 | nm | Sichtbares Licht |
+| **Spitzensensitivität** | 560 | nm | Grüngelber Bereich |
+| **Sichtwinkel** | ±60 | ° | Breiter Erfassungsbereich |
+| **Ansprechzeit** | < 1 | ms | Sehr schnell |
+| **Betriebstemperatur** | -30 bis +85 | °C | Industrietauglich |
+| **Genauigkeit** | ±15 | % | Relativ zur Lichtintensität |
+
+### 6.3 Pinbelegung und Anschluss
+
+```
+ALS-PT19 (Top View)
+┌─────────────┐
+│   1  2  3   │
+└─────────────┘
+  │  │  │
+  │  │  └── GND    (Pin 3)
+  │  └───── OUT    (Pin 2) → Analog Pin A0-A3
+  └──────── VCC    (Pin 1) → 5V
+```
+
+#### Anschlussschema für RelayNode
+
+**4 Sensoren parallel an Arduino Nano Every:**
+
+| Sensor # | LED | VCC | OUT → Arduino | GND |
+|----------|-----|-----|---------------|-----|
+| 1 | PUMP | 5V | A0 | GND |
+| 2 | VENT | 5V | A1 | GND |
+| 3 | LED3 | 5V | A2 | GND |
+| 4 | LED4 | 5V | A3 | GND |
+
+**Hinweis:** Alle VCC können gemeinsam an 5V-Rail, alle GND an GND-Rail.
+
+### 6.4 Mechanische Installation
+
+#### Positionierung relativ zur LED
+
+**Optimaler Abstand:** 5-10 mm von LED-Oberfläche
+
+**Ausrichtung:** Perpendikular (senkrecht) zur LED
+
+**Befestigungsmethoden:**
+1. **Heißkleber:** Einfach, schnell, repositionierbar
+2. **3D-gedruckter Halter:** Professionell, präzise
+3. **Kabelbinder:** Flexibel, schnelle Montage
+
+#### Lichtabschirmung (kritisch!)
+
+**Problem:** Umgebungslicht (Schrankbeleuchtung) kann Messung verfälschen
+
+**Lösung:** Lichttunnel erstellen
+
+```
+┌─────────────┐
+│   LED       │  ← Relay-LED
+└──────┬──────┘
+       │  5-10mm
+┌──────▼──────┐
+│ ████████████ │  ← Schwarzer Schrumpfschlauch
+│  Sensor     │      (10-15mm Länge)
+│  ALS-PT19   │
+└─────────────┘
+```
+
+**Material:** Schwarzer Schrumpfschlauch (10-15mm)
+
+**Anwendung:**
+1. Schlauch über Sensor schieben
+2. Mit Heißluft schrumpfen
+3. Öffnung zur LED ausrichten
+4. Zusätzlich schwarzes Klebeband bei Bedarf
+
+### 6.5 Kalibrierung
+
+Die Kalibrierung ist **essentiell** für zuverlässige LED-Erkennung.
+
+#### Schritt 1: Rohwerte erfassen
+
+**Debug-Modus aktivieren:**
+```cpp
+// In config.h:
+#define DEBUG_ENABLED 1
+```
+
+**Serial Monitor öffnen (115200 Baud) und Werte ablesen:**
+
+| LED-Zustand | Rohwert-Bereich | Beispiel |
+|-------------|-----------------|----------|
+| LED AUS | 0 - 100 | 20-50 |
+| LED AN | 300 - 900 | 400-700 |
+| Umgebungslicht | 50 - 200 | 100-150 |
+
+#### Schritt 2: Schwellwerte berechnen
+
+**Empfohlene Formel:**
+
+```
+THRESHOLD_ON  = (LED_AN_min + LED_AN_avg) / 2
+THRESHOLD_OFF = (LED_AUS_max + Umgebung_avg) / 2
+```
+
+**Beispiel:**
+- LED_AUS: 20-50 (avg: 35)
+- LED_AN: 400-700 (avg: 550)
+- Umgebung: 100-150 (avg: 125)
+
+```
+THRESHOLD_ON  = (400 + 550) / 2 = 475  → 300 (mit Sicherheitsmarge)
+THRESHOLD_OFF = (50 + 125) / 2 = 87    → 100 (mit Sicherheitsmarge)
+```
+
+#### Schritt 3: config.h anpassen
+
+```cpp
+// In RelayNode/config.h:
+#define THRESHOLD_ON  300   // Anpassen basierend auf Kalibrierung
+#define THRESHOLD_OFF 100   // Anpassen basierend auf Kalibrierung
+```
+
+#### Schritt 4: Blink-Erkennung tunen
+
+**Bei unzuverlässiger Blink-Erkennung:**
+
+1. **Blink-Frequenz messen:**
+   - Zähle Blinks pro Sekunde (z.B. 2 Hz)
+   - Berechne Periode: T = 1000ms / 2 = 500ms
+
+2. **Parameter anpassen:**
+```cpp
+#define BLINK_MIN_INTERVAL 50    // ~T/10
+#define BLINK_MAX_INTERVAL 1000  // ~2*T
+#define BLINK_MIN_COUNT 2        // Erhöhen bei False Positives
+```
+
+### 6.6 Software-Integration
+
+#### Analogwert lesen
+
+```cpp
+int lightValue = analogRead(A0);  // 0-1023 (10-bit ADC)
+```
+
+#### Moving Average Filter (implementiert in led_monitor.cpp)
+
+```cpp
+// Beispiel: 5-Sample Moving Average
+int samples[5] = {0};
+int sampleIndex = 0;
+
+void addSample(int newValue) {
+  samples[sampleIndex] = newValue;
+  sampleIndex = (sampleIndex + 1) % 5;
+}
+
+int getFilteredValue() {
+  int sum = 0;
+  for (int i = 0; i < 5; i++) {
+    sum += samples[i];
+  }
+  return sum / 5;
+}
+```
+
+#### Hysterese-Schwellwerte
+
+```cpp
+if (value > THRESHOLD_ON) {
+  state = LED_STATE_ACTIVE;
+} else if (value < THRESHOLD_OFF) {
+  state = LED_STATE_IDLE;
+} else {
+  // Hysterese-Zone: Behalte vorherigen Zustand
+  state = previousState;
+}
+```
+
+### 6.7 Fehlerdiagnose
+
+#### Problem: Sensor liest immer 0
+
+**Ursachen:**
+- Sensor nicht angeschlossen
+- VCC fehlt
+- Defekter Sensor
+
+**Lösungen:**
+1. Multimeter: VCC-Pin auf 5V prüfen
+2. Multimeter: OUT-Pin auf 0-5V prüfen (bei Licht ändern)
+3. Sensor austauschen
+
+#### Problem: Sensor liest immer 1023
+
+**Ursachen:**
+- Kurzschluss VCC→OUT
+- Sensor übersättigt (zu hell)
+
+**Lösungen:**
+1. Verkabelung prüfen
+2. Lichtabschirmung verbessern
+3. ND-Filter vor Sensor (bei sehr hellen LEDs)
+
+#### Problem: Schwankende Werte / False Triggers
+
+**Ursachen:**
+- Umgebungslicht
+- EMI (Elektromagnetische Störungen)
+- Lose Verbindungen
+
+**Lösungen:**
+1. Lichtabschirmung verbessern
+2. `SMOOTHING_SAMPLES` erhöhen (z.B. auf 10)
+3. Hysterese-Zone vergrößern
+4. Sensorkabel von Stromleitungen fernhalten
+5. 0.1µF Kondensator zwischen OUT und GND löten
+
+#### Problem: Blink-Erkennung funktioniert nicht
+
+**Ursachen:**
+- Blink-Frequenz außerhalb detektierbarem Bereich
+- Zu wenige Samples pro Blink
+- Parameter falsch eingestellt
+
+**Lösungen:**
+1. Blink-Frequenz im Serial Monitor beobachten
+2. `CHECK_INTERVAL` verkleinern (z.B. 50ms statt 100ms)
+3. `BLINK_MIN_INTERVAL` und `BLINK_MAX_INTERVAL` anpassen
+4. `BLINK_MIN_COUNT` erhöhen (weniger False Positives)
+
+### 6.8 Wartung
+
+#### Wöchentlich
+- Visuelle Inspektion: Sensor-Position korrekt?
+- Funktion prüfen: LED-Zustandsänderungen erkannt?
+
+#### Monatlich
+- Sensor-Linse reinigen (weiches, trockenes Tuch)
+- Lichtabschirmung auf Risse prüfen
+- Verkabelung auf festen Sitz prüfen
+
+#### Jährlich
+- Vollständige Rekalibrierung
+- Sensor-Alterung prüfen (Werte vergleichen)
+- Bei Drift >20%: Sensor austauschen
+
+### 6.9 Beispiel-Messwerte
+
+#### Typische Schrack-Relay LEDs
+
+| LED-Farbe | AUS | AN | Empfohlene Schwellwerte |
+|-----------|-----|-----|------------------------|
+| Rot | 20-60 | 350-550 | ON=300, OFF=100 |
+| Grün | 25-70 | 400-650 | ON=350, OFF=120 |
+| Gelb | 30-80 | 380-600 | ON=320, OFF=130 |
+| Blau | 15-50 | 450-700 | ON=380, OFF=90 |
+
+**Hinweis:** Werte können je nach LED-Hersteller, Alter und Umgebung variieren. Immer individuell kalibrieren!
+
+---
+
+## 7. Sensor-Wartungsplan (aktualisiert)
+
+### Erweiterte Wartungstabelle
+
+| Sensor | Täglich | Wöchentlich | Monatlich | Jährlich |
+|--------|---------|-------------|-----------|----------|
+| JSN-SR04T | - | Visuell prüfen | Reinigen | Austauschen bei Drift |
+| DS18B20 | - | - | Prüfen | Kalibrierung |
+| TSW-20M | - | Sichtfenster prüfen | Reinigen | Austauschen |
+| CQRSENTDS01 | - | - | Elektroden reinigen | Kalibrierung |
+| **ALS-PT19** | **-** | **Position prüfen** | **Linse reinigen** | **Rekalibrierung** |
+
+---
+
+## 8. Zusammenfassung (aktualisiert)
+
+Das BioSync-System nutzt jetzt **9 Sensoren** über **2 Nodes**:
+
+### SensorNode (4 Sensoren)
+1. **JSN-SR04T** – Füllstand (Ultraschall)
+2. **DS18B20** – Temperatur (1-Wire)
+3. **TSW-20M** – Trübung (Analog)
+4. **CQRSENTDS01** – TDS (Analog)
+
+### RelayNode (4 Sensoren) - NEU
+5. **ALS-PT19 #1** – PUMP LED Status
+6. **ALS-PT19 #2** – VENT LED Status
+7. **ALS-PT19 #3** – LED3 Status
+8. **ALS-PT19 #4** – LED4 Status
+
+**Zusätzliche Features:**
+- Event-basierte Kommunikation (nur bei Zustandsänderung)
+- 3 LED-Zustände: IDLE, ACTIVE, ERROR (blinkend)
+- Moving Average Filter für Störunterdrückung
+- Hysterese-Schwellwerte für Stabilität
+
+---
+
+**Dokumentversion:** 2.1  
+**Letzte Aktualisierung:** 2025-11-03  
+**Autor:** BioSync Project Team
+

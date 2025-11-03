@@ -144,11 +144,17 @@ BioSync uses **2 pages:**
 │                                                        │
 └────────────────────────────────────────────────────────┘
 
-Components List:
-  - tDist: Text component (id: 1)
-  - tTemp: Text component (id: 2)
-  - tTurb: Text component (id: 3)
-  - tTDS: Text component (id: 4)
+Components List (Sensor Data):
+  - tDist: Text component (id: 1) - Füllstand/Distance
+  - tTemp: Text component (id: 2) - Temperatur/Temperature
+  - tTurb: Text component (id: 3) - Trübung/Turbidity
+  - tTDS: Text component (id: 4) - TDS-Wert/TDS Value
+  
+Components List (Relay Status) - NEU v2.0:
+  - tPump: Text component (id: 7) - Pump LED Status
+  - tVent: Text component (id: 8) - Ventilation LED Status
+  
+Optional Components:
   - btnRefresh: Button component (id: 5)
   - nIdle: Number component (id: 6, invisible, for idle counter)
   - tIdleTimer: Timer component (interval: 1000ms)
@@ -192,11 +198,23 @@ Components List:
    - tim: 1000 (1 second interval)
    - en: 1 (enabled)
 
+6. **Add Relay Status Fields (v2.0 - NEU):**
+   - Toolbox → Text (2×)
+   - objname: `tPump`, `tVent`
+   - txt: "IDLE" (initial value)
+   - font: Font20
+   - xcen: 1
+   - ycen: 1
+   - bco: Choose based on status:
+     - 63488 (red) for ERROR
+     - 2016 (green) for ACTIVE
+     - 65535 (white) for IDLE
+
 ---
 
 ## 5. Component Reference
 
-### 5.1 Text Component (tDist, tTemp, tTurb, tTDS)
+### 5.1 Text Component (Sensor Data: tDist, tTemp, tTurb, tTDS)
 
 **Properties:**
 
@@ -223,7 +241,57 @@ nextion_send("tTurb.txt=\"450\"");
 nextion_send("tTDS.txt=\"320\"");
 ```
 
-### 5.2 Button Component (btnRefresh)
+### 5.2 Text Component (Relay Status: tPump, tVent) - v2.0 NEU
+
+**Properties:**
+
+| Property | Value | Description |
+|----------|-------|-------------|
+| objname | `tPump` / `tVent` | Unique identifier for relay status |
+| txt | "IDLE" | Initial status (IDLE/ACTIVE/ERROR) |
+| font | Font20 | Font reference |
+| xcen | 1 | Horizontal center |
+| ycen | 1 | Vertical center |
+| sta | solid | Draw style |
+
+**Background Colors by Status:**
+
+| Status | Background Color (bco) | Description |
+|--------|------------------------|-------------|
+| IDLE | 65535 (white) | Relay off, normal |
+| ACTIVE | 2016 (green) | Relay on, operating |
+| ERROR | 63488 (red) | Relay blinking, fault |
+
+**Update from Arduino:**
+
+```cpp
+// Format for relay status:
+// <component>.txt="<status>"
+// <component>.bco=<color>
+
+// Example: Pump becomes ACTIVE (green)
+nextion_send("tPump.txt=\"ACTIVE\"");
+nextion_send("tPump.bco=2016");  // Green background
+
+// Example: Vent remains IDLE (white)
+nextion_send("tVent.txt=\"IDLE\"");
+nextion_send("tVent.bco=65535");  // White background
+
+// Example: Pump ERROR (red)
+nextion_send("tPump.txt=\"ERROR\"");
+nextion_send("tPump.bco=63488");  // Red background
+```
+
+**Layout Suggestion:**
+
+```
+┌────────────────────────────────────┐
+│  Pump Status:  [ ACTIVE ]  (green) │
+│  Vent Status:  [  IDLE  ]  (white) │
+└────────────────────────────────────┘
+```
+
+### 5.3 Button Component (btnRefresh)
 
 **Properties:**
 
@@ -245,7 +313,7 @@ nIdle.val=0
 print "BTN_REFRESH"
 ```
 
-### 5.3 Timer Component (tIdleTimer)
+### 5.4 Timer Component (tIdleTimer)
 
 **Properties:**
 

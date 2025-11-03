@@ -67,69 +67,113 @@ BioSync ist ein verteiltes Echtzeit-Monitoring-System zur kontinuierlichen Über
 
 ### 1.2 Systemarchitektur - Überblick
 
-Das BioSync-System besteht aus zwei Hauptknoten (Nodes), die über eine RS-485 Verbindung kommunizieren:
+Das BioSync-System besteht aus drei Hauptknoten (Nodes), die über RS-485 Verbindungen kommunizieren:
 
 ```
-╔══════════════════════════════════════════════════════════════════════════╗
-║                        BIOSYNC SYSTEM ARCHITEKTUR                        ║
-╚══════════════════════════════════════════════════════════════════════════╝
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                    BIOSYNC SYSTEM ARCHITEKTUR (v2.0)                           ║
+║                          3-Node Architecture                                    ║
+╚════════════════════════════════════════════════════════════════════════════════╝
 
-    🏠 DISPLAY NODE (Haus)              📡 RS-485              🌊 SENSOR NODE (Schacht)
-    ┌──────────────────────┐          (CAT7 Kabel)          ┌──────────────────────┐
-    │                      │          bis 100m              │                      │
-    │  ┌────────────────┐  │                                │  ┌────────────────┐  │
-    │  │ Arduino Mega   │◄─┼────────────────────────────────┤  │ Arduino Nano   │  │
-    │  │ (ATmega2560)   │  │                                │  │ Every          │  │
-    │  │                │  │      <SENSOR;DIST=...>         │  │ (ATmega4809)   │  │
-    │  │ - Datenempfang │  │                                │  │                │  │
-    │  │ - Protokoll-   │  │                                │  │ - Sensor-      │  │
-    │  │   Parsing      │  │                                │  │   Messung      │  │
-    │  │ - Display-     │  │                                │  │ - Daten-       │  │
-    │  │   Steuerung    │  │                                │  │   Aufbereitung │  │
-    │  └────────┬───────┘  │                                │  └────────┬───────┘  │
-    │           │          │                                │           │          │
-    │           ▼          │                                │           ▼          │
-    │  ┌────────────────┐  │                                │  ┌────────────────┐  │
-    │  │ Nextion        │  │                                │  │ Sensor Array   │  │
-    │  │ NX4024T032     │  │                                │  │                │  │
-    │  │ 3.2" Touch     │  │                                │  │ • JSN-SR04T    │  │
-    │  │                │  │                                │  │ • DS18B20      │  │
-    │  │ - Visualisier. │  │                                │  │ • TSW-20M      │  │
-    │  │ - User Input   │  │                                │  │ • CQRSENTDS01  │  │
-    │  └────────────────┘  │                                │  └────────────────┘  │
-    │                      │                                │                      │
-    │  ┌────────────────┐  │                                │  ┌────────────────┐  │
-    │  │ 12V Netzteil   │  │                                │  │ LM2596         │  │
-    │  │ (2A)           │──┼───12V über CAT7────────────────┤  │ (12V→5V)       │  │
-    │  │                │  │                                │  │                │  │
-    │  └────────────────┘  │                                │  └────────────────┘  │
-    │                      │                                │                      │
-    └──────────────────────┘                                └──────────────────────┘
-         Trockene                                               IP67 wasserdicht
-         Umgebung                                               Gehäuse
+┌─────────────┐         ┌─────────────┐         ┌─────────────┐
+│ SensorNode  │─RS485──→│ DisplayNode │←─RS485──│ RelayNode   │
+│ (Schacht)   │ Serial1 │ (Haus)      │ Serial3 │ (Schrank)   │
+│             │         │             │         │             │
+│ • JSN-SR04T │         │ • Nextion   │         │ • 4× ALS    │
+│ • DS18B20   │         │ • RTC ⏰    │         │   -PT19     │
+│ • TSW-20M   │         │ • SD 💾     │         │             │
+│ • TDS       │         │             │         │             │
+└─────────────┘         └─────────────┘         └─────────────┘
+     Nano Every            Mega 2560              Nano Every
+     
+     
+🏠 DISPLAY NODE (Haus) - Central Hub
+┌────────────────────────────────────────────────────────────────────────┐
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │                    Arduino Mega 2560                              │  │
+│  │                                                                    │  │
+│  │  Serial1 (D18/D19) ←─ SensorNode RS-485 ─ Sensor data           │  │
+│  │  Serial2 (D16/D17) ←→ Nextion Display    ─ HMI control          │  │
+│  │  Serial3 (D14/D15) ←─ RelayNode RS-485   ─ LED status           │  │
+│  │  I²C (D20/D21)     ←→ RTC DS3231         ─ Timestamps ⏰        │  │
+│  │  SPI (D50-D53)     ←→ SD Card            ─ Data logging 💾      │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                          │
+│  ┌────────────────┐    ┌──────────┐    ┌──────────────┐               │
+│  │ Nextion Display│    │ RTC      │    │ SD Card      │               │
+│  │ 3.2" Touch     │    │ DS3231   │    │ FAT32        │               │
+│  │ 320x240        │    │ CR2032   │    │ sensor.csv   │               │
+│  │                │    │          │    │ relay.csv    │               │
+│  └────────────────┘    └──────────┘    └──────────────┘               │
+│                                                                          │
+│  ┌────────────────┐                                                     │
+│  │ 12V Netzteil   │──→ Powers all 3 nodes via distribution            │
+│  │ (2A)           │                                                     │
+│  └────────────────┘                                                     │
+└────────────────────────────────────────────────────────────────────────┘
+
+
+🌊 SENSOR NODE (Schacht)         ⚡ RELAY NODE (Schaltschrank)
+┌──────────────────────┐         ┌──────────────────────┐
+│  Arduino Nano Every  │         │  Arduino Nano Every  │
+│                      │         │                      │
+│  • JSN-SR04T (D2/D3) │         │  • ALS-PT19 #1 (A0)  │
+│  • DS18B20 (D4)      │         │  • ALS-PT19 #2 (A1)  │
+│  • TSW-20M (A0)      │         │  • ALS-PT19 #3 (A2)  │
+│  • TDS (A1)          │         │  • ALS-PT19 #4 (A3)  │
+│  • RS-485 (D6/D7)    │         │  • RS-485 (D6/D7)    │
+│                      │         │                      │
+│  ┌────────────────┐  │         │  Monitors:           │
+│  │ LM2596         │  │         │  - Pump LED          │
+│  │ 12V→5V         │  │         │  - Vent LED          │
+│  └────────────────┘  │         │  - Status LEDs       │
+│                      │         │                      │
+│  IP67 Enclosure      │         │  ┌────────────────┐  │
+└──────────────────────┘         │  │ LM2596         │  │
+                                 │  │ 12V→5V         │  │
+                                 │  └────────────────┘  │
+                                 └──────────────────────┘
 ```
 
 #### Systemkomponenten
 
-**Display Node (Master):**
-- Empfängt Sensordaten vom Sensor Node
+**Display Node (Central Hub):**
+- Empfängt Sensordaten vom Sensor Node (Serial1)
+- Empfängt Relay-Status vom Relay Node (Serial3)
 - Verarbeitet und validiert empfangene Daten
-- Steuert das Nextion Touchdisplay
-- Bietet Benutzerinteraktion
-- Zentrale Stromversorgung für beide Nodes
+- Steuert das Nextion Touchdisplay (Serial2)
+- **RTC DS3231:** Generiert präzise Zeitstempel für alle Logs ⏰
+- **SD-Card Logger:** Speichert Sensor- und Relay-Daten langfristig 💾
+  - `sensor.csv`: Periodisches Logging alle 20 Minuten
+  - `relay.csv`: Event-gesteuertes Logging bei Statusänderungen
+- Bietet Benutzerinteraktion über Touch-Display
+- Zentrale Stromversorgung für alle drei Nodes
 
-**Sensor Node (Slave):**
-- Erfasst Messwerte von 4 Sensoren
+**Sensor Node:**
+- Erfasst Messwerte von 4 Sensoren (Distanz, Temperatur, Trübung, TDS)
 - Verarbeitet Rohdaten lokal
-- Sendet formatierte Daten periodisch
+- Sendet formatierte Daten periodisch alle 5 Sekunden
+- Nachrichtenformat: `<SENSOR;DIST=xxx;TMP=xx;TUR=xxx;TDS=xxx>`
 - Autonomer Betrieb ohne Bestätigung
 - Powered über CAT7 vom Display Node
 
-**Kommunikations-Link:**
-- RS-485 differenzielle Übertragung
-- CAT7 Ethernet-Kabel als physisches Medium
-- Distanzen bis 100m möglich
-- Separate Adern für Power und Daten
+**Relay Node (NEW in v2.0):** ⚡
+- Überwacht 4 Schrack-Relay-LEDs mit ALS-PT19 Lichtsensoren
+- Erkennt LED-Zustände: IDLE, ACTIVE, ERROR (blinkend)
+- Event-getriebene Kommunikation (sendet nur bei Statusänderung)
+- Nachrichtenformat: `<RELAY;PUMP=ACTIVE;VENT=IDLE;LED3=IDLE;LED4=IDLE>`
+- Reduziert Bus-Traffic durch intelligente Filterung
+- Powered über separates 12V Netzteil im Schaltschrank
+
+**Kommunikations-Links:**
+- **RS-485 A (SensorNode ↔ DisplayNode):**
+  - Differenzielle Übertragung über CAT7-Kabel
+  - Distanzen bis 100m möglich
+  - 9600 Baud, 8N1
+- **RS-485 B (RelayNode ↔ DisplayNode):**
+  - Twisted Pair Kabel
+  - Event-basierte Übertragung
+  - 9600 Baud, 8N1
 
 ### 1.3 Hauptmerkmale
 
@@ -631,29 +675,50 @@ Temperature Rise: ~2-3°C above ambient (with heatsink)
                 ┌────────────────────────┼────────────────────────┐
                 │                        │                        │
                 │                        │                        │
-        ┌───────▼────────┐      ┌───────▼────────┐      ┌───────▼────────┐
-        │  Serial 0       │      │  Serial 1       │      │  Serial 2       │
-        │  (USB)          │      │  (RS-485)       │      │  (Nextion)      │
-        │                 │      │                 │      │                 │
-        │  D0: RX         │      │  D19: RX1       │      │  D17: RX2       │
-        │  D1: TX         │      │  D18: TX1       │      │  D16: TX2       │
-        │  115200 baud    │      │  9600 baud      │      │  9600 baud      │
-        │  Debug Only     │      │  Data Reception │      │  Display Ctrl   │
-        └───────┬─────────┘      └───────┬─────────┘      └───────┬─────────┘
+        ┌───────▼────────┐  ┌───────▼────────┐  ┌───────▼────────┐  ┌───────▼────────┐
+        │  Serial 0       │  │  Serial 1       │  │  Serial 2       │  │  Serial 3       │
+        │  (USB)          │  │  (SensorNode)   │  │  (Nextion)      │  │  (RelayNode)    │
+        │                 │  │                 │  │                 │  │                 │
+        │  D0: RX         │  │  D19: RX1       │  │  D17: RX2       │  │  D15: RX3       │
+        │  D1: TX         │  │  D18: TX1       │  │  D16: TX2       │  │  D14: TX3       │
+        │  115200 baud    │  │  9600 baud      │  │  9600 baud      │  │  9600 baud      │
+        │  Debug Only     │  │  Sensor Data    │  │  Display Ctrl   │  │  Relay Status   │
+        └───────┬─────────┘  └───────┬─────────┘  └───────┬─────────┘  └───────┬─────────┘
+                │                    │                    │                    │
+                │                    │                    │                    │
+        ┌───────▼────────┐  ┌───────▼────────┐  ┌───────▼────────┐
+        │  I²C Bus        │  │  SPI Bus        │  │  GPIO           │
+        │                 │  │                 │  │                 │
+        │  D20: SDA       │  │  D50: MISO      │  │  D53: Status LED│
+        │  D21: SCL       │  │  D51: MOSI      │  │                 │
+        │                 │  │  D52: SCK       │  │                 │
+        │  RTC DS3231 ⏰  │  │  D53: SD_CS     │  │                 │
+        └─────────────────┘  └─────────────────┘  └─────────────────┘
                 │                        │                        │
-                │                        │                        │
-        Not used in         ┌────────────▼─────────┐     ┌───────▼─────────┐
-        deployed system     │ MAX485               │     │ Nextion Display │
-                            │ RS-485 Receiver      │     │ NX4024T032      │
-                            │                      │     │                 │
-                            │ - A Line ← CAT7 5    │     │ STM32F030       │
-                            │ - B Line ← CAT7 6    │     │ 3.2" 320x240    │
-                            │ - DE/RE → GND        │     │ 65K Colors      │
-                            │   (RX only mode)     │     │ Resistive Touch │
-                            │                      │     │                 │
-                            │ - VCC: 5V            │     │ - VCC: 5V       │
-                            │ - I: 1mA (RX)        │     │ - I: 85mA       │
-                            └──────────────────────┘     └─────────────────┘
+
+        ┌────────────────┐  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐
+        │ MAX485 #1      │  │ Nextion Display│  │ MAX485 #2      │  │ RTC DS3231 ⏰  │
+        │ SensorNode     │  │ NX4024T032     │  │ RelayNode      │  │                 │
+        │                │  │                │  │                │  │ - CR2032 Backup │
+        │ A ← CAT7 #5    │  │ STM32F030      │  │ A ← Twisted A  │  │ - I²C Address   │
+        │ B ← CAT7 #6    │  │ 3.2" 320x240   │  │ B ← Twisted B  │  │   0x68          │
+        │ DE/RE → GND    │  │ 65K Colors     │  │ DE/RE → GND    │  │                 │
+        │ (RX only)      │  │ Touch Panel    │  │ (RX only)      │  │ - VCC: 5V       │
+        │                │  │                │  │                │  │ - I: 1mA        │
+        │ - VCC: 5V      │  │ - VCC: 5V      │  │ - VCC: 5V      │  └─────────────────┘
+        │ - I: 1mA       │  │ - I: 85mA      │  │ - I: 1mA       │  
+        └────────────────┘  └────────────────┘  └────────────────┘  ┌────────────────┐
+                                                                     │ SD Card Module │
+                                                                     │ 💾             │
+                                                                     │                 │
+                                                                     │ - FAT32 Format  │
+                                                                     │ - sensor.csv    │
+                                                                     │ - relay.csv     │
+                                                                     │ - Auto-create   │
+                                                                     │                 │
+                                                                     │ - VCC: 5V       │
+                                                                     │ - I: 50mA       │
+                                                                     └─────────────────┘
 
                               ┌──────────────────────┐
                               │  12V AC/DC Power     │
@@ -692,15 +757,20 @@ Temperature Rise: ~2-3°C above ambient (with heatsink)
 POWER CONSUMPTION:
 ─────────────────
 ATmega2560:      50 mA @ 5V = 0.25W
-MAX485 (RX):      1 mA @ 5V = 0.005W
+MAX485 #1 (RX):   1 mA @ 5V = 0.005W
+MAX485 #2 (RX):   1 mA @ 5V = 0.005W
 Nextion Display: 85 mA @ 5V = 0.425W
+RTC DS3231:       1 mA @ 5V = 0.005W ⏰
+SD Card Module:  50 mA @ 5V = 0.25W (during write) 💾
 
-TOTAL Display Node:  ~136 mA @ 5V = 0.68W @ 5V
+TOTAL Display Node:  ~188 mA @ 5V = 0.94W @ 5V (peak during SD write)
+TOTAL Display Node:  ~138 mA @ 5V = 0.69W @ 5V (average)
 
 12V Power Supply Output:
-- Display Node @ 5V:  0.68W / 0.92 (eff.) = 0.74W @ 12V = 62mA
+- Display Node @ 5V:  0.94W / 0.92 (eff.) = 1.02W @ 12V = 85mA (peak)
 - Sensor Node @ 12V:  0.30W / 1 (direct)   = 0.30W @ 12V = 25mA
-- TOTAL 12V:          1.04W @ 12V ≈ 87mA
+- TOTAL 12V:          1.32W @ 12V ≈ 110mA (peak)
+- TOTAL 12V:          1.04W @ 12V ≈ 87mA (average, typical)
 
 12V/2A PSU is oversized → Good for:
 - Future expansions
@@ -947,6 +1017,232 @@ struct SensorData {
 ```
 
 ---
+
+
+
+---
+
+## 2.5 Code-Beispiele aus der Implementation
+
+### 2.5.1 RTC DS3231 - Zeitstempel-Generierung ⏰
+
+**RTC Initialisierung (DisplayNode/rtc.cpp):**
+
+```cpp
+bool rtc_begin() {
+  if (!rtc.begin()) {
+    Serial.println(F("ERROR: RTC not found!"));
+    return false;
+  }
+  
+  if (rtc.lostPower()) {
+    Serial.println(F("WARNING: RTC lost power, setting to compile time"));
+    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  }
+  
+  Serial.println(F("RTC ready"));
+  return true;
+}
+
+String rtc_getTimestampString() {
+  DateTime now = rtc.now();
+  char buffer[20];
+  sprintf(buffer, "%04d-%02d-%02d %02d:%02d:%02d",
+          now.year(), now.month(), now.day(),
+          now.hour(), now.minute(), now.second());
+  return String(buffer);
+}
+```
+
+**Verwendung im Hauptprogramm:**
+
+```cpp
+void loop() {
+  // Bei Sensor-Daten-Empfang
+  if (sensorDataReceived) {
+    String timestamp = rtc_getTimestampString();
+    // Timestamp: "2025-11-03 09:15:42"
+    
+    sdlogger_logSensor(timestamp, distance, temp, turbidity, tds);
+  }
+}
+```
+
+### 2.5.2 SD-Card Logger - Dual-CSV-System 💾
+
+**Sensor-Daten Logging (DisplayNode/sdlogger.cpp):**
+
+```cpp
+bool sdlogger_logSensor(const String &timestamp,
+                        const String &distance,
+                        const String &temperature,
+                        const String &turbidity,
+                        const String &tds) {
+  File sensorFile = SD.open(SENSOR_LOG_FILE, FILE_WRITE);
+  if (!sensorFile) {
+    lastError = F("Failed to open sensor.csv");
+    return false;
+  }
+  
+  sensorFile.print(timestamp);
+  sensorFile.print(',');
+  sensorFile.print(distance);
+  sensorFile.print(',');
+  sensorFile.print(temperature);
+  sensorFile.print(',');
+  sensorFile.print(turbidity);
+  sensorFile.print(',');
+  sensorFile.println(tds);
+  sensorFile.close();
+  
+  return true;
+}
+```
+
+**Relay-Event Logging (DisplayNode/sdlogger.cpp):**
+
+```cpp
+bool sdlogger_logRelay(const String &timestamp,
+                       const String &event,
+                       const String &pumpState,
+                       const String &ventState) {
+  File relayFile = SD.open(RELAY_LOG_FILE, FILE_WRITE);
+  if (!relayFile) {
+    lastError = F("Failed to open relay.csv");
+    return false;
+  }
+  
+  relayFile.print(timestamp);
+  relayFile.print(',');
+  relayFile.print(event);
+  relayFile.print(',');
+  relayFile.print(pumpState);
+  relayFile.print(',');
+  relayFile.println(ventState);
+  relayFile.close();
+  
+  return true;
+}
+```
+
+**Periodisches Logging:**
+
+```cpp
+// Im Hauptprogramm (DisplayNode.ino)
+unsigned long lastSensorLog = 0;
+const unsigned long SENSOR_LOG_INTERVAL = 1200000; // 20 Minuten
+
+void loop() {
+  // Sensor-Logging alle 20 Minuten
+  if (millis() - lastSensorLog >= SENSOR_LOG_INTERVAL) {
+    if (sensorDataValid && rtc_isRunning()) {
+      String timestamp = rtc_getTimestampString();
+      sdlogger_logSensor(timestamp, 
+                        lastSensorData.distance,
+                        lastSensorData.temperature,
+                        lastSensorData.turbidity,
+                        lastSensorData.tds);
+      lastSensorLog = millis();
+    }
+  }
+  
+  // Event-basiertes Relay-Logging bei Statusänderung
+  if (relayStateChanged) {
+    String timestamp = rtc_getTimestampString();
+    sdlogger_logRelay(timestamp, eventName, pumpState, ventState);
+    relayStateChanged = false;
+  }
+}
+```
+
+### 2.5.3 RelayNode Nachrichtenformat
+
+**Nachrichtenstruktur:**
+
+```
+<RELAY;PUMP=<state>;VENT=<state>;LED3=<state>;LED4=<state>>
+
+Mögliche Zustände:
+- IDLE: LED aus
+- ACTIVE: LED an (steady)
+- ERROR: LED blinkt
+
+Beispiele:
+<RELAY;PUMP=IDLE;VENT=IDLE;LED3=IDLE;LED4=IDLE>
+<RELAY;PUMP=ACTIVE;VENT=IDLE;LED3=IDLE;LED4=IDLE>
+<RELAY;PUMP=ERROR;VENT=ACTIVE;LED3=IDLE;LED4=IDLE>
+```
+
+**Parsing im DisplayNode (relay_parser.cpp):**
+
+```cpp
+RelayData parseRelayMessage(const String &message) {
+  RelayData data;
+  
+  // Extrahiere einzelne Werte
+  data.pumpState = extractValue(message, "PUMP=");
+  data.ventState = extractValue(message, "VENT=");
+  data.led3State = extractValue(message, "LED3=");
+  data.led4State = extractValue(message, "LED4=");
+  
+  return data;
+}
+
+String extractValue(const String &message, const String &key) {
+  int startIdx = message.indexOf(key);
+  if (startIdx < 0) return "";
+  
+  startIdx += key.length();
+  int endIdx = message.indexOf(';', startIdx);
+  if (endIdx < 0) endIdx = message.indexOf('>', startIdx);
+  
+  return message.substring(startIdx, endIdx);
+}
+```
+
+### 2.5.4 CSV-Datei-Formate
+
+**sensor.csv** (Periodisch, alle 20 Minuten):
+
+```csv
+Timestamp,Distance_cm,Temperature_C,Turbidity,TDS_ppm
+2025-11-03 09:00:00,125.3,18.2,450,320
+2025-11-03 09:20:00,124.8,18.3,452,318
+2025-11-03 09:40:00,125.1,18.2,448,322
+```
+
+**relay.csv** (Event-getrieben, bei Statusänderung):
+
+```csv
+Timestamp,Event,Pump_State,Vent_State
+2025-11-03 09:00:00,INITIAL,IDLE,IDLE
+2025-11-03 09:15:30,PUMP_ACTIVE,ACTIVE,IDLE
+2025-11-03 09:30:15,PUMP_IDLE,IDLE,IDLE
+2025-11-03 10:05:42,PUMP_ERROR,ERROR,IDLE
+2025-11-03 10:10:18,VENT_ACTIVE,ERROR,ACTIVE
+```
+
+### 2.5.5 DisplayNode v2.0 Pin-Allokation
+
+**Komplette Pin-Übersicht:**
+
+| Interface | Pins | Komponente | Baudrate/Protokoll |
+|-----------|------|------------|-------------------|
+| Serial0 (USB) | D0/D1 | Debug (PC) | 115200 Baud |
+| Serial1 | D18/D19 | SensorNode RS-485 | 9600 Baud |
+| Serial2 | D16/D17 | Nextion Display | 9600 Baud |
+| Serial3 | D14/D15 | RelayNode RS-485 | 9600 Baud |
+| I²C | D20 (SDA) / D21 (SCL) | RTC DS3231 | I²C @ 0x68 |
+| SPI | D50-D53 | SD-Card Module | SPI @ 4 MHz |
+| GPIO | D53 | Status-LED (SD-Card) | Digital Out |
+
+**Vorteile dieser Architektur:**
+
+- ✅ Alle Serials auf Hardware-UART (stabil, kein CPU-Overhead)
+- ✅ Keine Pin-Konflikte zwischen Interfaces
+- ✅ Standard-Pins für I²C und SPI auf Mega
+- ✅ Unabhängige Datenströme ohne Interferenz
+
 
 ## 3. Systemkomponenten
 

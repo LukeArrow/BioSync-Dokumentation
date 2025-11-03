@@ -670,10 +670,399 @@ Nach Abschluss aller Tests sollten folgende Punkte erfüllt sein:
 
 ---
 
+## 13. RelayNode Tests (NEU)
+
+### 13.1 LED-Sensor Grundtest
+
+**Ziel:** Überprüfung der ALS-PT19 Sensoren
+
+**Vorbereitung:**
+- RelayNode mit Strom versorgen
+- Serial Monitor öffnen (115200 Baud)
+- Debug-Modus aktiviert
+
+**Test 1: Sensor-Basisfunktion**
+
+1. **Sensor 1 (A0) abdecken:**
+   - Wert sollte auf <50 fallen
+   - Serial Monitor zeigt niedrigen Wert
+
+2. **Taschenlampe auf Sensor 1:**
+   - Wert sollte auf >400 steigen
+   - Serial Monitor zeigt hohen Wert
+
+3. **Wiederhole für Sensor 2-4 (A1-A3)**
+
+**Erwartetes Ergebnis:**
+```
+LED 0 (PUMP) initialized: 45 -> IDLE
+LED 1 (VENT) initialized: 52 -> IDLE
+LED 2 (LED3) initialized: 38 -> IDLE
+LED 3 (LED4) initialized: 43 -> IDLE
+```
+
+✅ **Bestanden wenn:** Alle 4 Sensoren reagieren auf Licht/Dunkelheit
+
+### 13.2 LED-Zustandserkennung Test
+
+**Ziel:** Korrekte Erkennung von IDLE, ACTIVE, ERROR
+
+**Test 2: IDLE-Zustand (LED AUS)**
+
+1. Stelle sicher, dass Relay-LED aus ist
+2. Beobachte Serial Monitor
+3. Prüfe RS-485 Nachricht
+
+**Erwartetes Ergebnis:**
+```
+[RelayNode] Status changed - Sent: <RELAY;PUMP=IDLE;VENT=IDLE;LED3=IDLE;LED4=IDLE>
+```
+
+**Test 3: ACTIVE-Zustand (LED AN)**
+
+1. Schalte Relay-LED ein (dauerhaft)
+2. Warte 1-2 Sekunden
+3. Prüfe Serial Monitor und RS-485
+
+**Erwartetes Ergebnis:**
+```
+LED 0 (PUMP) changed: IDLE -> ACTIVE (value: 550)
+Status changed - Sent: <RELAY;PUMP=ACTIVE;VENT=IDLE;LED3=IDLE;LED4=IDLE>
+```
+
+**Test 4: ERROR-Zustand (LED BLINKT)**
+
+1. Schalte LED in Blink-Modus (falls möglich)
+2. Warte mindestens 2 Sekunden
+3. Prüfe Erkennung
+
+**Erwartetes Ergebnis:**
+```
+LED 0 (PUMP) changed: ACTIVE -> ERROR (value: 320)
+Status changed - Sent: <RELAY;PUMP=ERROR;VENT=IDLE;LED3=IDLE;LED4=IDLE>
+```
+
+✅ **Bestanden wenn:** Alle 3 Zustände korrekt erkannt
+
+### 13.3 Kalibrierungstest
+
+**Ziel:** Schwellwerte für Umgebung optimieren
+
+**Test 5: Rohwert-Erfassung**
+
+1. **LED AUS + Umgebungslicht:**
+   - Notiere Wert: _______
+
+2. **LED AN + Umgebungslicht:**
+   - Notiere Wert: _______
+
+3. **LED BLINKT:**
+   - Notiere Min: _______
+   - Notiere Max: _______
+
+**Berechnung:**
+```
+THRESHOLD_ON  = (LED_AN + LED_AN_avg) / 2
+THRESHOLD_OFF = (LED_AUS + Umgebung) / 2
+```
+
+**Test 6: Schwellwert-Anpassung**
+
+1. Passe `config.h` an:
+```cpp
+#define THRESHOLD_ON  ___  // Berechneter Wert
+#define THRESHOLD_OFF ___  // Berechneter Wert
+```
+
+2. Firmware neu hochladen
+3. Wiederhole Test 2-4
+4. Prüfe auf False Triggers
+
+✅ **Bestanden wenn:** Keine False Positives über 10 Minuten
+
+### 13.4 RS-485 Kommunikationstest
+
+**Ziel:** RelayNode → DisplayNode Kommunikation
+
+**Test 7: Loopback-Test**
+
+1. **Ohne DisplayNode:**
+   - Verbinde RS-485 A→A und B→B (Loopback)
+   - Ändere LED-Zustand
+   - Prüfe ob Nachricht zurückkommt
+
+**Test 8: DisplayNode-Integration**
+
+1. **Mit DisplayNode:**
+   - Verbinde RelayNode RS-485 mit DisplayNode Serial3
+   - Ändere LED-Zustand
+   - Prüfe DisplayNode Serial Monitor
+
+**Erwartetes Ergebnis (DisplayNode):**
+```
+[RelayNode] <RELAY;PUMP=ACTIVE;VENT=IDLE;LED3=IDLE;LED4=IDLE>
+Relay event logged: 2025-11-03 14:23:15 | PUMP_ACTIVE | PUMP=ACTIVE | VENT=IDLE
+```
+
+✅ **Bestanden wenn:** DisplayNode empfängt alle RelayNode-Nachrichten
+
+### 13.5 Event-Driven Test
+
+**Ziel:** Nur Änderungen werden gesendet
+
+**Test 9: Stabile LED**
+
+1. LED einschalten
+2. Warte 5 Minuten ohne Änderung
+3. Zähle RS-485 Nachrichten
+
+**Erwartetes Ergebnis:**
+- **1 Nachricht** beim Einschalten
+- **0 Nachrichten** während stabiler Phase
+
+**Test 10: Mehrfache Zustandsänderungen**
+
+1. LED: AUS → AN → AUS → BLINK → AUS
+2. Zähle RS-485 Nachrichten
+3. Prüfe alle Zustände geloggt
+
+**Erwartetes Ergebnis:**
+- **4 Nachrichten** (für jede Änderung)
+- Alle Zustände korrekt
+
+✅ **Bestanden wenn:** Keine redundanten Nachrichten
+
+---
+
+## 14. DisplayNode v2.0 Tests (NEU)
+
+### 14.1 RTC-Funktionstest
+
+**Ziel:** Echtzeituhr korrekt initialisiert
+
+**Test 11: RTC-Initialisierung**
+
+1. DisplayNode mit Strom versorgen
+2. Serial Monitor öffnen (115200 Baud)
+3. Prüfe Startup-Meldung
+
+**Erwartetes Ergebnis:**
+```
+BioSync DisplayNode v2.0
+RTC initialized
+Current time: 2025/11/3 14:23:45
+```
+
+**Test 12: Zeitgenauigkeit**
+
+1. Notiere RTC-Zeit: _______
+2. Vergleiche mit echter Zeit
+3. Warte 1 Stunde
+4. Prüfe Abweichung
+
+**Erwartetes Ergebnis:**
+- Abweichung <2 Sekunden/Stunde
+
+✅ **Bestanden wenn:** RTC läuft und Zeit korrekt
+
+### 14.2 SD-Card Logging Test
+
+**Ziel:** CSV-Dateien werden korrekt geschrieben
+
+**Test 13: SD-Karten-Initialisierung**
+
+1. **SD-Karte vorbereiten:**
+   - FAT32 formatieren
+   - In Modul einlegen
+   - DisplayNode starten
+
+**Erwartetes Ergebnis:**
+```
+Initializing SD card on CS pin 53... OK
+Creating sensor.csv... OK
+Creating relay.csv... OK
+SD Card ready
+```
+
+**Test 14: Sensor-Daten Logging**
+
+1. Warte auf SensorNode-Daten
+2. Prüfe sensor.csv nach 20 Minuten
+3. Öffne Datei auf PC
+
+**Erwartetes Dateiinhalt (sensor.csv):**
+```csv
+Timestamp,Distance_cm,Temperature_C,Turbidity,TDS_ppm
+2025-11-03 06:18:42,125.3,18.2,450,320
+2025-11-03 06:38:42,124.8,18.3,452,318
+```
+
+**Test 15: Relay-Event Logging**
+
+1. Ändere RelayNode LED-Zustand
+2. Sofort relay.csv prüfen
+3. Öffne Datei auf PC
+
+**Erwartetes Dateiinhalt (relay.csv):**
+```csv
+Timestamp,Event,Pump_State,Vent_State
+2025-11-03 06:18:42,INITIAL,IDLE,IDLE
+2025-11-03 06:25:15,PUMP_ACTIVE,ACTIVE,IDLE
+2025-11-03 06:30:22,PUMP_IDLE,IDLE,IDLE
+```
+
+✅ **Bestanden wenn:** Beide CSV-Dateien korrekt geschrieben
+
+### 14.3 Multi-Serial Test
+
+**Ziel:** Alle 3 Serial-Ports funktionieren parallel
+
+**Test 16: Gleichzeitige Kommunikation**
+
+1. **Setup:**
+   - Serial1: SensorNode sendet periodisch
+   - Serial2: Nextion Display aktiv
+   - Serial3: RelayNode sendet bei Änderung
+
+2. **Test durchführen:**
+   - Ändere SensorNode-Werte
+   - Ändere RelayNode-LEDs
+   - Beobachte Nextion Display
+   - Prüfe Serial Monitor
+
+**Erwartetes Ergebnis:**
+```
+[SensorNode] <SENSOR;DIST=125.3;TMP=18.2;TUR=450;TDS=320>
+[RelayNode] <RELAY;PUMP=ACTIVE;VENT=IDLE;LED3=IDLE;LED4=IDLE>
+Sensor data logged: 2025-11-03 14:25:00 | 125.3 | 18.2 | 450 | 320
+Relay event logged: 2025-11-03 14:25:05 | PUMP_ACTIVE | PUMP=ACTIVE | VENT=IDLE
+```
+
+✅ **Bestanden wenn:** Keine verlorenen Nachrichten, kein Buffer-Overflow
+
+### 14.4 Nextion Display Test
+
+**Ziel:** RelayNode-Felder werden aktualisiert
+
+**Test 17: Display-Update**
+
+1. Prüfe Nextion-Komponenten existieren:
+   - `tPump` (Text-Feld)
+   - `tVent` (Text-Feld)
+
+2. Ändere LED-Zustände am RelayNode
+3. Beobachte Nextion Display
+
+**Erwartetes Ergebnis:**
+- `tPump` zeigt: "ACTIVE" (wenn Pumpe an)
+- `tVent` zeigt: "IDLE" (wenn Ventilation aus)
+
+✅ **Bestanden wenn:** Display zeigt korrekte Relay-Zustände
+
+---
+
+## 15. System-Integrationstest v2.0
+
+### 15.1 Gesamtsystem-Test
+
+**Ziel:** Alle 3 Nodes arbeiten zusammen
+
+**Test 18: End-to-End Datenfluss**
+
+1. **SensorNode:** Misst und sendet Daten
+2. **DisplayNode:** 
+   - Empfängt SensorNode-Daten
+   - Empfängt RelayNode-Daten
+   - Updated Nextion Display
+   - Loggt zu SD-Karte
+3. **RelayNode:** Überwacht LEDs, sendet bei Änderung
+
+**Überprüfung:**
+
+| Node | Check | Status |
+|------|-------|--------|
+| SensorNode | Daten senden | ☐ |
+| RelayNode | LED-Zustände senden | ☐ |
+| DisplayNode | Serial1 empfängt | ☐ |
+| DisplayNode | Serial3 empfängt | ☐ |
+| DisplayNode | Nextion updated | ☐ |
+| DisplayNode | sensor.csv geschrieben | ☐ |
+| DisplayNode | relay.csv geschrieben | ☐ |
+| RTC | Zeit korrekt | ☐ |
+| SD-Card | Daten persistent | ☐ |
+
+**Test 19: Langzeittest (24h)**
+
+1. System 24 Stunden laufen lassen
+2. Mehrmals LED-Zustände ändern
+3. Nach 24h prüfen:
+   - SD-Karte: Anzahl Einträge korrekt?
+   - sensor.csv: ~72 Einträge (alle 20 min)
+   - relay.csv: Anzahl = Anzahl Änderungen
+   - Kein Speicher-Overflow
+   - Kein Buffer-Überlauf
+
+✅ **Bestanden wenn:** System läuft stabil, alle Daten korrekt geloggt
+
+### 15.2 Fehlertoleranz-Test
+
+**Test 20: Node-Ausfall**
+
+1. **SensorNode trennen:**
+   - DisplayNode läuft weiter
+   - RelayNode funktioniert weiter
+   - Keine Fehlerausgaben
+
+2. **RelayNode trennen:**
+   - SensorNode läuft weiter
+   - DisplayNode empfängt weiter SensorNode
+
+3. **SD-Karte entfernen:**
+   - System läuft weiter
+   - Warnung im Serial Monitor
+   - Nextion Display funktioniert
+
+✅ **Bestanden wenn:** Partieller Ausfall stoppt System nicht
+
+---
+
+## 16. Abschließende Checkliste v2.0
+
+### SensorNode ✅
+- [ ] Alle 4 Sensoren funktionieren
+- [ ] RS-485 sendet korrekt
+- [ ] Keine Sensor-Fehler
+
+### RelayNode ✅ (NEU)
+- [ ] Alle 4 ALS-PT19 Sensoren arbeiten
+- [ ] LED-Zustände korrekt erkannt (IDLE/ACTIVE/ERROR)
+- [ ] RS-485 sendet nur bei Änderungen
+- [ ] Kalibrierung durchgeführt
+
+### DisplayNode v2.0 ✅
+- [ ] Serial1 (SensorNode) empfängt
+- [ ] Serial3 (RelayNode) empfängt
+- [ ] Nextion zeigt alle Werte (Sensor + Relay)
+- [ ] RTC läuft und Zeit korrekt
+- [ ] SD-Karte initialisiert
+- [ ] sensor.csv wird geschrieben (alle 20 min)
+- [ ] relay.csv wird geschrieben (bei Events)
+
+### System ✅
+- [ ] End-to-End Kommunikation funktioniert
+- [ ] 24h Langzeittest bestanden
+- [ ] System ist störfest
+- [ ] Datenlogging korrekt
+- [ ] CSV-Dateien lesbar
+
+---
+
 ## 📚 Weitere Ressourcen
 
 - [SensorNode README](../SensorNode/README.md)
 - [DisplayNode README](../DisplayNode/README.md)
+- [RelayNode README](../RelayNode/README.md) **(NEU)**
+- [RelayNode Setup Guide](../RELAY_NODE_GUIDE.md) **(NEU)**
 - [Komponenten-Liste](../Komponenten-Liste.md)
 - [Spannungsversorgung](../Spannungsversorgung.md)
 

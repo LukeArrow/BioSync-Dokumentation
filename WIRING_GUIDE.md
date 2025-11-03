@@ -237,13 +237,148 @@ Die Display-Node empfängt Daten vom Sensor-Node und zeigt diese auf dem Nextion
 
 **Empfehlung:** Netzteil mit mindestens 2A Strombelastbarkeit (Reserve für Erweiterungen).
 
+#### DS3231 RTC Modul – Echtzeituhr (NEU)
+
+| RTC Pin | Arduino Pin | Hinweis |
+|---------|-------------|---------|
+| VCC | 5V | Spannungsversorgung |
+| GND | GND | Gemeinsame Masse |
+| SDA | D20 (SDA) | I²C Datenleitung |
+| SCL | D21 (SCL) | I²C Taktleitung |
+
+**Besonderheit:** 
+- CR2032 Batterie im RTC-Modul sorgt für Zeiterhalt bei Stromausfall
+- I²C-Bus kann weitere Geräte aufnehmen
+- Pull-up Widerstände meist bereits auf Modul vorhanden
+
+#### SD-Card Modul – Datenlogging (NEU)
+
+| SD-Modul Pin | Arduino Pin | Hinweis |
+|--------------|-------------|---------|
+| VCC | 5V | Spannungsversorgung |
+| GND | GND | Gemeinsame Masse |
+| MISO | D50 (MISO) | SPI Datenleitung Master In |
+| MOSI | D51 (MOSI) | SPI Datenleitung Master Out |
+| SCK | D52 (SCK) | SPI Taktleitung |
+| CS | D53 (CS) | Chip Select |
+
+**Wichtige Hinweise:**
+- SD-Karte als FAT32 formatieren
+- Karte vor Einschalten einlegen
+- D53 als CS-Pin ist Standard für Mega
+- Maximale Kartengröße: 32GB (FAT32-Limit)
+
+#### RS-485 Modul #2 – RelayNode Kommunikation (NEU)
+
+| RS-485 Pin | Arduino Pin | Hinweis |
+|-----------|-------------|---------|
+| VCC | 5V | Spannungsversorgung |
+| GND | GND | Gemeinsame Masse |
+| RO (RX) | D15 (RX3) | Empfang von RelayNode |
+| DI (TX) | D14 (TX3) | Senden zu RelayNode |
+| DE | nicht belegt | Nur Empfangsmodus |
+| RE | GND | Empfangsmodus aktiviert |
+| A | Twisted Pair A | RS-485 Datenleitung A |
+| B | Twisted Pair B | RS-485 Datenleitung B |
+
+**Hinweis:** RelayNode sendet nur (event-driven), DisplayNode empfängt nur → DE/RE nicht benötigt.
+
 ### Wichtige Verdrahtungshinweise für Display-Node
 
-1. **Hardware Serial nutzen:** TX1/RX1 für RS-485, TX2/RX2 für Nextion – nicht TX/RX (USB-Port)!
+1. **Hardware Serial nutzen:** 
+   - Serial1 (D18/D19) für SensorNode RS-485
+   - Serial2 (D16/D17) für Nextion
+   - Serial3 (D14/D15) für RelayNode RS-485
 2. **TX/RX nicht vertauschen:** TX vom Display geht zu RX am Mega und umgekehrt
-3. **Stromversorgung:** LM2596 muss mindestens 200mA liefern können
+3. **Stromversorgung:** LM2596 muss mindestens 300mA liefern können (erhöht durch neue Module)
 4. **Gemeinsame Masse:** Alle GND-Anschlüsse zusammenführen
 5. **12V Aufteilung:** Netzteil versorgt Display-Node UND Sensor-Node über CAT7
+6. **I²C und SPI:** Pull-up/Pull-down Widerstände meist auf Modulen vorhanden
+7. **Status-LED:** Pin D13 zeigt SD-Karten-Status an
+
+---
+
+## Relay-Node Verdrahtung (im Schaltschrank)
+
+### Komponenten-Übersicht
+
+Die Relay-Node überwacht 4 Schrack-Relay-LEDs und sendet Statusänderungen via RS-485 an die Display-Node.
+
+### Detaillierte Pinbelegung
+
+#### Arduino Nano Every – Zentrale Steuerung
+
+| Arduino Pin | Verbindung zu | Funktion |
+|------------|---------------|----------|
+| VIN (5V) | LM2596 OUT+ | Spannungsversorgung (5V) |
+| GND | LM2596 OUT- | Gemeinsame Masse |
+
+#### ALS-PT19 Lichtsensoren (4×) – LED-Statuserkennung
+
+**Sensor 1 (PUMP):**
+| Sensor Pin | Arduino Pin | Hinweis |
+|-----------|-------------|---------|
+| VCC | 5V | Spannungsversorgung |
+| GND | GND | Gemeinsame Masse |
+| OUT | A0 | Analoger Lichtintensitätswert |
+
+**Sensor 2 (VENT):**
+| Sensor Pin | Arduino Pin | Hinweis |
+|-----------|-------------|---------|
+| VCC | 5V | Spannungsversorgung |
+| GND | GND | Gemeinsame Masse |
+| OUT | A1 | Analoger Lichtintensitätswert |
+
+**Sensor 3 (LED3):**
+| Sensor Pin | Arduino Pin | Hinweis |
+|-----------|-------------|---------|
+| VCC | 5V | Spannungsversorgung |
+| GND | GND | Gemeinsame Masse |
+| OUT | A2 | Analoger Lichtintensitätswert |
+
+**Sensor 4 (LED4):**
+| Sensor Pin | Arduino Pin | Hinweis |
+|-----------|-------------|---------|
+| VCC | 5V | Spannungsversorgung |
+| GND | GND | Gemeinsame Masse |
+| OUT | A3 | Analoger Lichtintensitätswert |
+
+**⚠️ WICHTIG:** Sensoren müssen direkt vor den Relay-LEDs positioniert werden (5-10mm Abstand). Siehe [RELAY_NODE_GUIDE.md](../RELAY_NODE_GUIDE.md) für Installationsdetails.
+
+#### RS-485 Modul – Kommunikation zu DisplayNode
+
+| RS-485 Pin | Arduino Pin | Hinweis |
+|-----------|-------------|---------|
+| VCC | 5V | Spannungsversorgung |
+| GND | GND | Gemeinsame Masse |
+| DI (TX) | D7 | SoftwareSerial TX |
+| RO (RX) | D6 | SoftwareSerial RX |
+| DE | D5 | Driver Enable |
+| RE | D5 | Receiver Enable (parallel zu DE) |
+| A | Twisted Pair A | RS-485 Datenleitung A |
+| B | Twisted Pair B | RS-485 Datenleitung B |
+
+**Hinweis:** RelayNode verwendet SoftwareSerial, da Nano Every nur einen Hardware-Serial-Port hat.
+
+#### LM2596 Step-Down Modul – Spannungsversorgung
+
+| Modul Pin | Verbindung | Hinweis |
+|----------|------------|---------|
+| IN+ | 12V (von Schaltschrank) | 12V Einspeisung |
+| IN- | GND | Gemeinsame Masse |
+| OUT+ | Arduino VIN | Geregelte 5V Ausgabe |
+| OUT- | GND (gemeinsam) | Gemeinsame Masse |
+
+**⚠️ KRITISCH:** LM2596 VOR dem Anschluss auf **exakt 5,0V** einstellen!
+
+### Wichtige Verdrahtungshinweise für Relay-Node
+
+1. **Sensormontage:** ALS-PT19 Sensoren direkt vor Relay-LEDs positionieren (5-10mm Abstand)
+2. **Lichtabschirmung:** Sensoren gegen Umgebungslicht abschirmen (schwarze Schrumpfschläuche)
+3. **SoftwareSerial:** D6/D7 für RS-485 (nicht D0/D1)
+4. **DE/RE Steuerung:** Pin D5 steuert Sende/Empfangsmodus
+5. **Stromversorgung:** 12V aus Schaltschrank-Netzteil nutzen
+6. **Kalibrierung:** Schwellwerte in config.h anpassen (siehe RELAY_NODE_GUIDE.md)
 
 ---
 

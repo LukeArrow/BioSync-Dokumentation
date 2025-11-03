@@ -530,3 +530,321 @@ System eingeschaltet?
             └─ JA → SYSTEM OK ✓
 ```
 
+
+---
+
+## 9. RTC DS3231 Probleme ⏰
+
+### 9.1 "RTC not found!" beim Start
+
+**Symptom:**
+- Serial Monitor zeigt "ERROR: RTC not found!"
+- Timestamps nicht verfügbar
+- SD-Logging ohne Zeitstempel
+
+**Diagnose:**
+
+```
+Schritt 1: I²C-Verbindung prüfen
+  □ SDA an D20? (Arduino Mega)
+  □ SCL an D21? (Arduino Mega)
+  □ VCC an 5V?
+  □ GND verbunden?
+
+Schritt 2: I²C-Scanner ausführen
+  // Code in Arduino IDE → Examples → Wire → i2c_scanner
+  // RTC sollte an Adresse 0x68 erscheinen
+
+Schritt 3: Modul testen
+  □ RTC an anderem Arduino testen
+  □ Ersatz-RTC-Modul probieren
+```
+
+**Lösungen:**
+
+| Ursache | Lösung |
+|---------|--------|
+| Falsche Pinbelegung | SDA/SCL vertauscht? Korrekte Pins D20/D21 nutzen |
+| Defektes Modul | RTC-Modul austauschen |
+| Pull-up fehlt | Manche Module haben keine Pull-ups: 4.7kΩ zu VCC |
+| Falsche Adresse | Standard ist 0x68, prüfen mit I²C Scanner |
+
+### 9.2 "RTC lost power" Warnung
+
+**Symptom:**
+- Warnung "RTC lost power, setting to compile time"
+- Zeit springt auf Compile-Zeit zurück nach Stromausfall
+
+**Diagnose:**
+
+```
+□ CR2032 Batterie im RTC-Modul?
+□ Batterie korrekt eingelegt (+ nach oben)?
+□ Batteriespannung messen (sollte >2.5V sein)
+```
+
+**Lösungen:**
+
+```
+1. Neue CR2032 Batterie einlegen
+2. Batterie-Kontakte reinigen
+3. Zeit erneut setzen (siehe INSTALLATION_DETAILED.md)
+```
+
+### 9.3 Zeitdrift / Ungenaue Zeit
+
+**Symptom:**
+- RTC geht vor oder nach (mehr als 1 Minute pro Monat)
+- Timestamps ungenau
+
+**Diagnose:**
+
+```
+1. Zeit über 7 Tage beobachten
+2. Abweichung notieren
+3. DS3231 ist sehr präzise (±2ppm = ±1 Minute/Jahr)
+   → Bei größerer Drift: Modul defekt
+```
+
+**Lösungen:**
+
+| Problem | Lösung |
+|---------|--------|
+| Große Drift (>5 min/Monat) | RTC-Modul austauschen (vermutlich defekt) |
+| Kleine Drift (<1 min/Monat) | Normal für DS3231, bei Bedarf Software-Korrektur |
+| Temperatur-Einfluss | DS3231 hat TCXO (temperaturkompensiert), sollte nicht auftreten |
+
+---
+
+## 10. SD-Card Probleme 💾
+
+### 10.1 "SD Card initialization failed"
+
+**Symptom:**
+- Serial Monitor: "SD Card initialization failed"
+- Status-LED (D53) bleibt aus
+- Keine Datenlogging
+
+**Diagnose:**
+
+```
+Schritt 1: SD-Karte prüfen
+  □ SD-Karte vollständig eingesteckt?
+  □ SD-Karte als FAT32 formatiert?
+  □ SD-Karte ≤32 GB? (FAT32-Limit)
+  □ Schreibschutz-Schalter NICHT aktiviert?
+
+Schritt 2: Verkabelung prüfen
+  □ MISO → D50
+  □ MOSI → D51
+  □ SCK → D52
+  □ CS → D53
+  □ VCC → 5V
+  □ GND → GND
+
+Schritt 3: SPI-Bus testen
+  // Multimeter: Durchgang zwischen Modulen prüfen
+```
+
+**Lösungen:**
+
+| Ursache | Lösung |
+|---------|--------|
+| Falsche Formatierung | SD-Karte als FAT32 formatieren (nicht exFAT!) |
+| Zu große Karte | Karte >32GB? FAT32 nur bis 32GB |
+| Defekte Karte | Andere SD-Karte probieren (empfohlen: Class 10) |
+| CS-Pin falsch | CS muss D53 sein (Standard für Mega) |
+| Lockerer Kontakt | SD-Karte-Modul: Karte fest einstecken |
+
+### 10.2 "SD Card full" / Kein Speicherplatz
+
+**Symptom:**
+- Warnung "SD Card full"
+- Logging stoppt
+- Free space: 0 MB
+
+**Diagnose:**
+
+```
+Serial Monitor:
+  SD Card Status:
+    Size: 7.40 GB
+    Free: 0.02 GB  ← PROBLEM!
+```
+
+**Lösungen:**
+
+```
+Option 1: Alte Logs löschen
+  1. SD-Karte am PC anschließen
+  2. sensor.csv und relay.csv sichern (Backup!)
+  3. Dateien vom PC löschen
+  4. SD-Karte zurück in BioSync
+
+Option 2: Größere SD-Karte
+  1. Neue SD-Karte (8-32 GB) als FAT32 formatieren
+  2. Alte Logs kopieren (falls nötig)
+  3. Neue Karte einsetzen
+
+Option 3: Automatisches Löschen (Code-Erweiterung)
+  // Log-Rotation implementieren (z.B. älteste Einträge löschen)
+```
+
+### 10.3 Korrupte Log-Dateien
+
+**Symptom:**
+- sensor.csv oder relay.csv nicht lesbar
+- Fehlende Zeilen oder unleserliche Daten
+- "File write error"
+
+**Diagnose:**
+
+```
+1. SD-Karte am PC prüfen:
+   □ Datei öffenbar in Excel/Editor?
+   □ Header vorhanden?
+   □ Komische Zeichen?
+
+2. Serial Monitor beobachten:
+   □ "File write error" Meldungen?
+   □ Resets während Schreibvorgang?
+```
+
+**Lösungen:**
+
+| Ursache | Lösung |
+|---------|--------|
+| Stromausfall während Write | USV (UPS) installieren, SD Flush häufiger |
+| Defekte SD-Karte | Karte ersetzen (Class 10 empfohlen) |
+| Zu viele Writes | SD-Karten haben begrenzte Write-Cycles (~10.000) |
+| Datei-System-Fehler | SD-Karte am PC: CHKDSK (Win) / fsck (Linux) |
+
+**Datenrettung:**
+
+```
+1. SD-Karte NICHT formatieren!
+2. Backup der .csv-Dateien erstellen
+3. Tools nutzen:
+   - Windows: CHKDSK /F
+   - Linux: fsck.vfat -a /dev/sdX
+   - Mac: Disk Utility → First Aid
+4. Dateien in Texteditor öffnen und manuell reparieren
+```
+
+---
+
+## 11. RelayNode Probleme ⚡
+
+### 11.1 Keine Daten von RelayNode
+
+**Symptom:**
+- DisplayNode empfängt keine Relay-Statusmeldungen
+- Serial Monitor (DisplayNode): Keine `<RELAY;...>` Nachrichten
+- Relay-Status auf Display nicht verfügbar
+
+**Diagnose:**
+
+```
+Schritt 1: RelayNode Power
+  □ RelayNode Power-LED leuchtet?
+  □ LM2596 Output = 5V?
+
+Schritt 2: RS-485 Verbindung
+  □ A mit A verbunden?
+  □ B mit B verbunden?
+  □ Twisted Pair Kabel genutzt?
+  □ Gemeinsame GND?
+
+Schritt 3: RelayNode Serial Monitor (USB)
+  □ RelayNode sendet Nachrichten?
+  □ Format: <RELAY;PUMP=...;VENT=...>
+```
+
+**Lösungen:**
+
+| Ursache | Lösung |
+|---------|--------|
+| Keine Stromversorgung | 12V Netzteil im Schaltschrank prüfen |
+| RS-485 A/B vertauscht | A mit A, B mit B verbinden (nicht kreuzen!) |
+| Falsche DE/RE Steuerung | DE-Pin (D5) sollte HIGH beim Senden sein |
+| DisplayNode Serial3 nicht init | Code prüfen: `Serial3.begin(9600)` |
+| Defektes RS-485 Modul | RS-485 Modul austauschen |
+
+### 11.2 Falsche LED-Status-Erkennung
+
+**Symptom:**
+- RelayNode meldet falsche Zustände (ACTIVE statt IDLE)
+- LEDs blinken, aber Status zeigt IDLE
+- Sporadische Fehlmeldungen
+
+**Diagnose:**
+
+```
+Serial Monitor (RelayNode):
+  Pump: 850 → ACTIVE   ← Schwellwert überschritten?
+  Pump: 60 → IDLE      ← Analogwert korrekt?
+  
+Check:
+  □ Lichtsensor direkt vor LED? (5-10mm Abstand)
+  □ Umgebungslicht abgeschirmt?
+  □ Schwellwerte in config.h korrekt?
+```
+
+**Lösungen:**
+
+```
+Neu kalibrieren (siehe RELAY_NODE_GUIDE.md):
+
+1. LED ausschalten, Analogwert ablesen (z.B. 50)
+2. LED einschalten, Analogwert ablesen (z.B. 800)
+3. Schwellwert = Mittelwert: (50 + 800) / 2 = 425
+4. In config.h anpassen:
+   #define PUMP_THRESHOLD 425
+
+5. Firmware neu hochladen
+
+6. Test: LED ein/aus schalten und Status prüfen
+```
+
+### 11.3 Events werden nicht getriggert
+
+**Symptom:**
+- LED-Status ändert sich, aber keine Nachricht gesendet
+- relay.csv bleibt leer
+- Hysterese zu groß
+
+**Diagnose:**
+
+```
+Serial Monitor (RelayNode):
+  □ "State changed:" Meldungen erscheinen?
+  □ "Sending relay status:" nach State Change?
+  
+Check config.h:
+  #define HYSTERESIS 50   ← Zu groß?
+```
+
+**Lösungen:**
+
+| Problem | Lösung |
+|---------|--------|
+| Hysterese zu hoch | HYSTERESIS in config.h reduzieren (z.B. 30 statt 50) |
+| Debouncing filtert Events | DEBOUNCE_SAMPLES reduzieren (z.B. 3 statt 5) |
+| Blink-Frequenz zu hoch | BLINK_THRESHOLD anpassen (z.B. 3 statt 5) |
+| Ereignis zu kurz | LED muss >1 Sekunde in neuem Zustand bleiben |
+
+**Code-Anpassungen für höhere Sensitivität:**
+
+```cpp
+// In config.h:
+#define HYSTERESIS 30          // Reduziert (war 50)
+#define DEBOUNCE_SAMPLES 3     // Schnellere Reaktion (war 5)
+#define BLINK_THRESHOLD 3      // Weniger Samples für Blink-Erkennung
+```
+
+---
+
+**Ende des Troubleshooting Guides**
+
+Bei weiteren Problemen: [GitHub Issues](https://github.com/LukeArrow/BioSync/issues) öffnen.
+
