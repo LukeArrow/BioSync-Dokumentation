@@ -104,12 +104,12 @@ Steps:
 
 BioSync uses **2 pages:**
 
-1. **Page 0: Main Display (page `Page_main`)**
+1. **Page 0: Main Display (page `PgMain`)**
    - Shows sensor values
    - Interactive buttons
    - Idle timer for screensaver
 
-2. **Page 1: Screensaver (page `Page_screensaver`)**
+2. **Page 1: Screensaver (page `PgSafer`)**
    - Minimal content (energy saving)
    - Touch to wake
 
